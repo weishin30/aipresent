@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 流言解剖報告教練</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
+        .gradient-text { background: linear-gradient(to right, #4285F4, #DB4437, #F4B400, #0F9D58); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #111827; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #4285F4; border-radius: 10px; border: 2px solid #111827; }
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #4285F4 #1f2937; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+        dialog::backdrop { background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); }
+        @keyframes slideInDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .toast-enter { animation: slideInDown 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased min-h-screen flex flex-col">
+
+    <div id="toastContainer" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 pointer-events-none"></div>
+
+    <button id="loginBtn" class="fixed top-4 right-4 z-50 px-4 py-2 bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 transition-colors rounded-full flex items-center space-x-2 border border-gray-600 shadow-lg" title="學生登入">
+        <svg id="loginIcon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span id="loginStatusText" class="text-sm font-semibold">未登入</span>
+    </button>
+
+    <div class="container mx-auto p-4 md:p-6 flex-grow flex flex-col max-w-screen-2xl">
+        <header class="text-center mb-6 mt-2">
+            <h1 class="text-4xl md:text-5xl font-bold gradient-text" data-i18n="appTitle">AI 流言解剖報告教練</h1>
+            <p class="text-gray-400 mt-2 text-lg" data-i18n="appSubtitle">專為科學流言查核設計，精進您的批判思考與科學論證！</p>
+            <div class="mt-4 flex justify-center space-x-4">
+                <button id="langToggleBtn" class="px-4 py-1.5 rounded-full border border-gray-600 text-sm text-gray-300 hover:bg-gray-800 hover:border-blue-500 transition-colors flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                    <span>English</span>
+                </button>
+            </div>
+        </header>
+
+        <section class="mb-6 bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-700/50 flex-shrink-0">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-700/50 pb-3">
+                <h2 class="text-xl font-bold text-blue-400 flex items-center space-x-2" data-i18n="scoringCriteriaTitle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <span>流言解剖評分標準</span>
+                </h2>
+                <span class="text-sm font-semibold text-gray-400 bg-gray-900 px-3 py-1 rounded-full border border-gray-700" data-i18n="fixedWeights">固定權重 100%</span>
+            </div>
+            <div id="scoringCriteriaContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+            <div id="scoringPlaceholder" class="hidden h-16 flex-col items-center justify-center text-center text-gray-500 bg-gray-900/30 rounded-xl border border-gray-800">
+                <p data-i18n="scoringPlaceholder">評分標準僅適用於「簡報實戰模式」</p>
+            </div>
+        </section>
+
+        <main class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6 flex-grow">
+            <!-- 左側 60%：簡報區 -->
+            <div class="lg:col-span-3 bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-700/50 flex flex-col h-[55vh] min-h-[400px]">
+                <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                    <label class="text-lg font-bold text-blue-300 flex items-center space-x-2" data-i18n="yourPresentation">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>
+                        <span>您的查核簡報 (PDF)</span>
+                    </label>
+                    <div class="flex border border-gray-600 rounded-lg p-1 bg-gray-900/50">
+                        <button id="presentationModeBtn" class="px-4 py-1.5 rounded-md text-sm font-bold transition bg-blue-600 text-white" data-i18n="presentationMode">簡報模式</button>
+                        <button id="quickTalkModeBtn" class="px-4 py-1.5 rounded-md text-sm font-bold transition text-gray-400 hover:bg-gray-700 hover:text-white" data-i18n="quickTalkMode">短講模式</button>
+                    </div>
+                </div>
+                
+                <div id="presentationContainer" class="flex-grow flex flex-col space-y-3 overflow-hidden">
+                    <div class="flex items-center space-x-3 flex-shrink-0">
+                        <label for="pdfUpload" class="flex-grow bg-gray-700 hover:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-xl transition flex items-center justify-center space-x-2 cursor-pointer border border-gray-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <span id="pdfUploadBtnText" data-i18n="chooseFile">選擇檔案 (本機/雲端)...</span>
+                        </label>
+                        <input type="file" id="pdfUpload" accept=".pdf" class="sr-only">
+                        <button id="clearPdfBtn" class="hidden p-2.5 bg-red-600/90 hover:bg-red-700 rounded-xl transition flex-shrink-0" title="清除">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        </button>
+                    </div>
+                    
+                    <!-- 修復破版關鍵：加入 flex, justify-center, overflow-hidden -->
+                    <div id="presentationView" class="hidden flex-grow w-full bg-gray-950 rounded-xl border-2 border-gray-700 relative overflow-hidden shadow-inner flex items-center justify-center">
+                        <!-- Canvas 透過 max-w-full, max-h-full, object-contain 強制約束比例 -->
+                        <canvas id="pdfCanvas" class="max-w-full max-h-full object-contain"></canvas>
+                    </div>
+                    <div id="pdfControls" class="hidden flex-shrink-0 flex items-center justify-center space-x-6 bg-gray-900/50 py-2 rounded-lg border border-gray-700/50">
+                        <button id="prevPage" class="p-2 bg-blue-600 hover:bg-blue-700 rounded-full disabled:bg-gray-700 disabled:text-gray-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg></button>
+                        <span id="pageIndicator" class="text-lg font-mono font-bold tracking-widest text-gray-300"></span>
+                        <button id="nextPage" class="p-2 bg-blue-600 hover:bg-blue-700 rounded-full disabled:bg-gray-700 disabled:text-gray-500 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側 40%：攝影機、講稿與控制區 -->
+            <div class="lg:col-span-2 flex flex-col space-y-4 h-[55vh] min-h-[400px]">
+                <!-- 攝影機 -->
+                <div class="w-full flex-grow bg-gray-950 rounded-2xl overflow-hidden border-2 border-gray-700 relative shadow-lg min-h-[200px] flex items-center justify-center">
+                    <video id="webcam" class="w-full h-full object-cover transform scale-x-[-1]" autoplay muted playsinline></video>
+                    <!-- 攝影機錯誤提示優化 -->
+                    <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/90 text-center px-4 z-10">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 text-gray-500"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <p id="camStatusText" class="font-medium text-gray-400" data-i18n="cameraPermission">正在請求攝影機權限...</p>
+                    </div>
+                </div>
+
+                <!-- 講稿 (短講模式顯示) -->
+                <div id="scriptContainer" class="hidden flex-col h-[150px] bg-gray-800 rounded-2xl p-4 border border-gray-700/50 shadow-lg flex-shrink-0">
+                    <label for="speechScript" class="text-sm font-bold text-blue-300 mb-2 flex items-center space-x-2" data-i18n="yourScript">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        <span>您的講稿 (提詞器)</span>
+                    </label>
+                    <textarea id="speechScript" class="flex-grow bg-gray-900 border border-gray-700 rounded-xl p-3 text-gray-300 focus:ring-1 focus:ring-blue-500 outline-none transition custom-scrollbar resize-none" placeholder="請在此貼上您的演講稿..."></textarea>
+                </div>
+
+                <!-- 控制區 (倒數計時器 + 按鈕) -->
+                <div class="bg-gray-800 rounded-2xl p-4 border border-gray-700/50 shadow-lg flex flex-col items-center justify-center space-y-3 flex-shrink-0">
+                    <p class="text-4xl font-mono font-bold tracking-widest text-white drop-shadow-md transition-colors duration-300" id="timer">03:00</p>
+                    <button id="startBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-3.5 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 text-lg shadow-lg disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                        <span data-i18n="startPractice">開始錄製 (限時 3 分鐘)</span>
+                    </button>
+                    <p class="text-[11px] text-gray-500 text-center" data-i18n="privacyNote">時間到將自動送出分析。影片不留存，分析結果將寫入日誌。</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部：全寬度 AI 回饋儀表板 -->
+        <section id="reportDashboard" class="bg-gray-800 rounded-2xl shadow-xl border border-gray-700/50 flex flex-col min-h-[400px]">
+             <h2 class="text-xl font-bold text-center py-4 text-blue-400 border-b border-gray-700/50 bg-gray-800/80 rounded-t-2xl flex items-center justify-center space-x-2" data-i18n="feedbackTitle">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span>Gemini AI 回饋與答辯儀表板</span>
+             </h2>
+             <div class="flex-grow p-6 bg-gray-900/30 overflow-y-auto custom-scrollbar relative">
+                
+                <div id="initialState" class="h-full flex items-center justify-center">
+                    <p class="text-sm text-gray-500 font-medium bg-gray-800 px-6 py-3 rounded-full border border-gray-700 shadow-inner" data-i18n="fb_placeholder">完成報告後，AI 將在此提供分析並進行提問</p>
+                </div>
+
+                <!-- 讀取狀態 -->
+                <div id="loadingState" class="hidden h-full flex flex-col items-center justify-center text-center text-gray-300 space-y-5 py-10">
+                    <div class="relative">
+                        <svg class="animate-spin h-14 w-14 text-blue-500 opacity-20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle></svg>
+                        <svg class="animate-spin h-14 w-14 text-blue-400 absolute top-0 left-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </div>
+                    <div>
+                        <p id="loadingMsgText" class="text-lg font-bold text-white tracking-wide" data-i18n="analyzing">Gemini AI 正在為您解剖報告</p>
+                        <p class="text-sm text-gray-400 mt-1">請稍候片刻...</p>
+                    </div>
+                </div>
+                
+                <!-- 錯誤與重試狀態 -->
+                <div id="errorState" class="hidden h-full flex flex-col items-center justify-center text-center text-red-400 bg-red-950/20 rounded-xl p-8 border border-red-900/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <p class="text-xl font-bold text-white mb-2" data-i18n="analysisFailed">AI 分析遭遇阻礙</p>
+                    <p id="errorMessage" class="text-sm text-red-300/80 mb-5"></p>
+                    <button id="retryBtn" class="hidden px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all shadow-lg flex items-center space-x-2 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed border border-red-500/50">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        <span id="retryBtnText">重試</span>
+                    </button>
+                </div>
+
+                <!-- 成功分析的結果動態注入處 -->
+                <div id="feedbackResult" class="hidden grid grid-cols-1 md:grid-cols-4 gap-6"></div>
+             </div>
+        </section>
+    </div>
+
+    <!-- 學生登入視窗 -->
+    <dialog id="loginModal" class="bg-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-700 text-white m-auto backdrop:bg-black/80">
+        <div class="flex items-center space-x-3 mb-6">
+            <div class="bg-blue-600/20 p-3 rounded-full border border-blue-500/30">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            </div>
+            <div>
+                <h3 class="text-2xl font-bold text-white">登入與系統授權</h3>
+                <p class="text-gray-400 text-sm mt-1">請輸入資訊以獲取 AI 權限</p>
+            </div>
+        </div>
+        
+        <div class="space-y-4">
+            <div class="flex space-x-3">
+                <div class="w-1/2">
+                    <label class="block text-sm font-semibold text-gray-300 mb-1 ml-1">班級 <span class="text-red-400">*</span></label>
+                    <input type="text" id="studentClassInput" class="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-500" placeholder="例：701">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-sm font-semibold text-gray-300 mb-1 ml-1">座號 <span class="text-red-400">*</span></label>
+                    <input type="number" id="studentSeatInput" class="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-500" placeholder="例：05">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-300 mb-1 ml-1">姓名 <span class="text-red-400">*</span></label>
+                <input type="text" id="studentNameInput" class="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-500" placeholder="請輸入全名">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-300 mb-1 ml-1">課堂驗證碼 <span class="text-red-400">*</span></label>
+                <input type="password" id="classPasswordInput" class="w-full bg-gray-900 border border-gray-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none placeholder-gray-500" placeholder="向老師索取">
+            </div>
+        </div>
+
+        <div class="flex justify-end space-x-3 mt-8 pt-5 border-t border-gray-700/50">
+            <button id="cancelLoginBtn" class="px-5 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-xl transition-colors font-medium">取消</button>
+            <button id="submitLoginBtn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 font-bold text-white rounded-xl transition-colors flex items-center shadow-lg">驗證登入</button>
+        </div>
+    </dialog>
+
+    <script>
+        // =========================================================================
+        // 【重要】請將部署 Google Apps Script 後取得的 Web App URL 貼在下方：
+        // =========================================================================
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbzJ4LXQkPrgaEQwJxLXeTKkyvXUn52__KKZPtktsvzrXj1nTkqqbYC3GyJCiUtXdB7C/exec'; 
+        
+        let currentStudentClass = null;
+        let currentStudentSeat = null;
+        let currentStudentName = null;
+        let currentApiKey = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const startBtn = document.getElementById('startBtn');
+            const webcamVideo = document.getElementById('webcam');
+            const timerDisplay = document.getElementById('timer');
+            
+            const feedbackResult = document.getElementById('feedbackResult');
+            const initialState = document.getElementById('initialState');
+            const loadingState = document.getElementById('loadingState');
+            const loadingMsgText = document.getElementById('loadingMsgText');
+            const errorState = document.getElementById('errorState');
+            const errorMessage = document.getElementById('errorMessage');
+            const placeholder = document.getElementById('placeholder');
+            const camStatusText = document.getElementById('camStatusText');
+            
+            const retryBtn = document.getElementById('retryBtn');
+            const retryBtnText = document.getElementById('retryBtnText');
+            
+            const presentationModeBtn = document.getElementById('presentationModeBtn');
+            const quickTalkModeBtn = document.getElementById('quickTalkModeBtn');
+            const presentationContainer = document.getElementById('presentationContainer');
+            const scriptContainer = document.getElementById('scriptContainer');
+            const speechScript = document.getElementById('speechScript');
+            const langToggleBtn = document.getElementById('langToggleBtn');
+            
+            const scoringCriteriaContainer = document.getElementById('scoringCriteriaContainer');
+            const scoringPlaceholder = document.getElementById('scoringPlaceholder');
+            
+            const loginBtn = document.getElementById('loginBtn');
+            const loginStatusText = document.getElementById('loginStatusText');
+            const loginIcon = document.getElementById('loginIcon');
+            const loginModal = document.getElementById('loginModal');
+            const submitLoginBtn = document.getElementById('submitLoginBtn');
+            const cancelLoginBtn = document.getElementById('cancelLoginBtn');
+
+            let currentLang = 'zh-Hant';
+            
+            const translations = {
+                'zh-Hant': {
+                    appTitle: 'AI 流言解剖報告教練',
+                    appSubtitle: '專為科學流言查核設計，精進您的批判思考與科學論證！',
+                    scoringCriteriaTitle: '流言解剖評分標準',
+                    scoringPlaceholder: '評分標準僅適用於「簡報模式」',
+                    fixedWeights: '固定權重 100%',
+                    presentationMode: '簡報模式',
+                    quickTalkMode: '短講模式',
+                    yourPresentation: '您的查核簡報 (PDF)',
+                    chooseFile: '選擇檔案 (本機/雲端)...',
+                    cameraPermission: '請允許使用攝影機',
+                    yourScript: '您的講稿 (提詞器)',
+                    scriptPlaceholder: '請在此貼上您的演講稿...',
+                    startPractice: '開始錄製 (限時 3 分鐘)',
+                    stopRecording: '提早結束並分析',
+                    analysisComplete: '分析完成，可再次練習',
+                    privacyNote: '時間到將自動送出分析。影片不留存，分析結果將寫入日誌。',
+                    feedbackTitle: 'Gemini AI 回饋與答辯儀表板',
+                    fb_placeholder: '完成報告後，AI 將在此提供分析並進行提問',
+                    analyzing: 'Gemini AI 正在為您解剖報告',
+                    analyzingDefense: 'AI 評審正在聆聽您的答辯...',
+                    analysisFailed: 'AI 處理遭遇阻礙',
+                    description: '重點',
+                    crit_obs: '破綻觀察與質疑',
+                    crit_obs_desc: '清楚描述流言現象，並敏銳指出忽略的變因或不合理處',
+                    crit_strategy: '查證策略與工具應用',
+                    crit_strategy_desc: '搜尋關鍵字與 AI Prompt 提問是否精準且具引導性',
+                    crit_evidence: '科學證據與真相判決',
+                    crit_evidence_desc: '運用文獻解釋真實現象，清晰破解手法並說明真正原理',
+                    crit_extend: '實驗延伸與表達',
+                    crit_extend_desc: '提出具探究價值的新變因或疑問，以及整體口語表達',
+                },
+                'en': {
+                    appTitle: 'AI Rumor Anatomy Coach',
+                    appSubtitle: 'Designed for science debunking. Refine your critical thinking!',
+                    scoringCriteriaTitle: 'Scoring Criteria',
+                    scoringPlaceholder: 'Criteria only active in Presentation Mode',
+                    fixedWeights: 'Fixed 100%',
+                    presentationMode: 'Presentation',
+                    quickTalkMode: 'Pitch Mode',
+                    yourPresentation: 'Your Presentation (PDF)',
+                    chooseFile: 'Choose File...',
+                    cameraPermission: 'Please allow camera access',
+                    yourScript: 'Your Script (Teleprompter)',
+                    scriptPlaceholder: 'Paste your script here...',
+                    startPractice: 'Start (3 Min Limit)',
+                    stopRecording: 'Finish Early & Analyze',
+                    analysisComplete: 'Practice Again',
+                    privacyNote: 'Auto submits when time is up. Logs saved upon completion.',
+                    feedbackTitle: 'Feedback & Defense Dashboard',
+                    fb_placeholder: 'AI analysis and Mock Q&A will appear here after practice.',
+                    analyzing: 'Gemini is analyzing your report...',
+                    analyzingDefense: 'AI is evaluating your defense...',
+                    analysisFailed: 'Processing failed',
+                    description: 'Focus',
+                    crit_obs: 'Observation & Questioning',
+                    crit_obs_desc: 'Describes the rumor clearly, identifies missing variables.',
+                    crit_strategy: 'Verification Strategy',
+                    crit_strategy_desc: 'Precision of search keywords and AI prompts.',
+                    crit_evidence: 'Evidence & Verdict',
+                    crit_evidence_desc: 'Uses literature to explain facts and debunk tricks.',
+                    crit_extend: 'Extension & Delivery',
+                    crit_extend_desc: 'Proposes new variables; overall fluency.',
+                }
+            };
+
+            const SCORING_CRITERIA_KEYS = {
+                "破綻觀察與質疑": { key: "crit_obs", descKey: "crit_obs_desc" },
+                "查證策略與工具應用": { key: "crit_strategy", descKey: "crit_strategy_desc" },
+                "科學證據與真相判決": { key: "crit_evidence", descKey: "crit_evidence_desc" },
+                "實驗延伸與表達": { key: "crit_extend", descKey: "crit_extend_desc" }
+            };
+
+            const SCORING_CRITERIA_VALUES = {
+                "破綻觀察與質疑": 25,
+                "查證策略與工具應用": 20,
+                "科學證據與真相判決": 35,
+                "實驗延伸與表達": 20
+            };
+
+            let mediaRecorder;
+            let recordedChunks = [];
+            let stream;
+            
+            // 雙階段計時器設定
+            let videoTimerInterval;
+            let videoSeconds = 180; // 3分鐘限制
+            let isRecording = false;
+
+            let defenseTimerInterval;
+            let defenseSeconds = 300; // 5分鐘限制
+            
+            let pdfDoc = null;
+            let pageNum = 1;
+            let pageCount = 0;
+            let isRendering = false;
+
+            let retryData = { action: null, base64Video: null, script: null, mimeType: null, duration: null, qaText: null, defenseText: null };
+            let retryCountdownInterval = null;
+            
+            // 暫存第一次 AI 的提問內容，供答辯分析使用
+            let currentQATextContext = "";
+
+            function showToast(message, type = 'success') {
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                const colorClasses = { 'error': 'bg-red-600', 'warning': 'bg-yellow-600', 'success': 'bg-blue-600' };
+                toast.className = `toast-enter flex items-center px-5 py-3 rounded-xl shadow-xl text-white font-medium border border-white/10 ${colorClasses[type]}`;
+                toast.innerHTML = `<span>${message}</span>`;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateY(-100%)';
+                    setTimeout(() => toast.remove(), 400);
+                }, 3500);
+            }
+
+            async function callGAS(dataPayload) {
+                if(!GAS_URL || !GAS_URL.startsWith('https://script.google.com')) throw new Error("GAS 網址未正確設定");
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(dataPayload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                return await response.json();
+            }
+
+            loginBtn.addEventListener('click', () => loginModal.showModal());
+            cancelLoginBtn.addEventListener('click', () => loginModal.close());
+
+            submitLoginBtn.addEventListener('click', async () => {
+                const cName = document.getElementById('studentClassInput').value.trim();
+                const seat = document.getElementById('studentSeatInput').value.trim();
+                const sName = document.getElementById('studentNameInput').value.trim();
+                const pwd = document.getElementById('classPasswordInput').value.trim();
+
+                if (!cName || !seat || !sName || !pwd) return showToast("所有欄位皆為必填", "error");
+
+                submitLoginBtn.disabled = true;
+                submitLoginBtn.innerHTML = '驗證中...';
+
+                try {
+                    const result = await callGAS({ action: 'login', className: cName, seatNumber: seat, name: sName, password: pwd });
+                    if (result.success && result.apiKey) {
+                        currentStudentClass = cName; currentStudentSeat = seat; currentStudentName = sName; currentApiKey = result.apiKey;
+                        showToast(`歡迎, ${sName}！已取得授權。`, "success");
+                        loginModal.close();
+                        loginBtn.classList.replace('bg-gray-800', 'bg-blue-900/40');
+                        loginBtn.classList.replace('border-gray-600', 'border-blue-500/60');
+                        loginIcon.classList.add('text-green-400');
+                        loginStatusText.textContent = `${cName}-${seat} ${sName}`;
+                        loginStatusText.classList.add('text-blue-300');
+                    } else { showToast(result.message || "登入失敗", "error"); }
+                } catch (error) { showToast("網路錯誤或後端未設定", "error"); } 
+                finally { submitLoginBtn.disabled = false; submitLoginBtn.innerHTML = '驗證登入'; }
+            });
+
+            langToggleBtn.addEventListener('click', () => { currentLang = currentLang === 'zh-Hant' ? 'en' : 'zh-Hant'; updateUIText(); });
+
+            function updateUIText() {
+                const t = translations[currentLang];
+                document.querySelectorAll('[data-i18n]').forEach(el => {
+                    const key = el.getAttribute('data-i18n');
+                    if (t[key]) {
+                        const svgs = el.querySelectorAll('svg');
+                        if(svgs.length > 0) {
+                            el.innerHTML = ''; svgs.forEach(svg => el.appendChild(svg));
+                            const span = document.createElement('span'); span.textContent = t[key]; el.appendChild(span);
+                        } else { el.innerHTML = t[key]; }
+                    }
+                });
+                speechScript.placeholder = t.scriptPlaceholder;
+                const btnSpan = startBtn.querySelector('span');
+                btnSpan.textContent = isRecording ? t.stopRecording : (feedbackResult.innerHTML !== '' ? t.analysisComplete : t.startPractice);
+                langToggleBtn.querySelector('span').textContent = currentLang === 'zh-Hant' ? 'English' : '中文';
+                renderScoringCriteria();
+            }
+
+            function renderScoringCriteria() {
+                scoringCriteriaContainer.innerHTML = '';
+                const t = translations[currentLang];
+                for (const key in SCORING_CRITERIA_VALUES) {
+                    const info = SCORING_CRITERIA_KEYS[key];
+                    scoringCriteriaContainer.innerHTML += `
+                        <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-700/60 flex flex-col h-full">
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-blue-300 text-[0.95rem]">${t[info.key]}</h3>
+                                <span class="font-mono text-xl font-black text-green-400 drop-shadow-md">${SCORING_CRITERIA_VALUES[key]}%</span>
+                            </div>
+                            <p class="text-[0.75rem] text-gray-400 mt-auto pt-2 border-t border-gray-700/50 leading-relaxed">${t[info.descKey]}</p>
+                        </div>`;
+                }
+            }
+
+            function setMode(mode) {
+                if (mode === 'presentation') {
+                    presentationModeBtn.className = 'px-4 py-1.5 rounded-md text-sm font-bold transition bg-blue-600 text-white';
+                    quickTalkModeBtn.className = 'px-4 py-1.5 rounded-md text-sm font-bold transition text-gray-400 hover:bg-gray-700 hover:text-white';
+                    presentationContainer.style.display = 'flex';
+                    scriptContainer.style.display = 'none';
+                    scoringCriteriaContainer.style.display = 'grid';
+                    scoringPlaceholder.style.display = 'none';
+                } else {
+                    presentationModeBtn.className = 'px-4 py-1.5 rounded-md text-sm font-bold transition text-gray-400 hover:bg-gray-700 hover:text-white';
+                    quickTalkModeBtn.className = 'px-4 py-1.5 rounded-md text-sm font-bold transition bg-blue-600 text-white';
+                    presentationContainer.style.display = 'none';
+                    scriptContainer.style.display = 'flex';
+                    scoringCriteriaContainer.style.display = 'none';
+                    scoringPlaceholder.style.display = 'flex';
+                    if (pdfDoc) resetPdfState();
+                }
+            }
+            presentationModeBtn.addEventListener('click', () => setMode('presentation'));
+            quickTalkModeBtn.addEventListener('click', () => setMode('quicktalk'));
+
+            const pdfUploadInput = document.getElementById('pdfUpload');
+            const pdfUploadBtnText = document.getElementById('pdfUploadBtnText');
+            const clearPdfBtn = document.getElementById('clearPdfBtn');
+            const presentationView = document.getElementById('presentationView');
+            const pdfCanvas = document.getElementById('pdfCanvas');
+            const pdfControls = document.getElementById('pdfControls');
+            const prevPageBtn = document.getElementById('prevPage');
+            const nextPageBtn = document.getElementById('nextPage');
+            const pageIndicator = document.getElementById('pageIndicator');
+
+            pdfUploadInput.addEventListener('change', handlePdfUpload);
+            clearPdfBtn.addEventListener('click', resetPdfState); 
+
+            function resetPdfState() {
+                pdfDoc = null; pageNum = 1; pageCount = 0;
+                presentationView.classList.add('hidden'); pdfControls.classList.add('hidden'); clearPdfBtn.classList.add('hidden');
+                pdfUploadInput.value = ''; pdfUploadBtnText.textContent = translations[currentLang].chooseFile;
+                const context = pdfCanvas.getContext('2d'); if (context) context.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+            }
+
+            async function handlePdfUpload(e) {
+                const file = e.target.files[0];
+                if (!file || file.type !== 'application/pdf') return showToast("請上傳 PDF", "warning");
+                pdfUploadBtnText.textContent = '讀取中...';
+                
+                const fileReader = new FileReader();
+                fileReader.onload = async function() {
+                    try {
+                        pdfDoc = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+                        pageCount = pdfDoc.numPages; pageNum = 1;
+                        await renderPage(pageNum);
+                        presentationView.classList.remove('hidden'); pdfControls.classList.remove('hidden');
+                        pdfUploadBtnText.textContent = `已載入: ${file.name}`; clearPdfBtn.classList.remove('hidden'); 
+                    } catch (error) { resetPdfState(); showToast('讀取 PDF 失敗', 'error'); }
+                };
+                fileReader.readAsArrayBuffer(file);
+            }
+            
+            async function renderPage(num) {
+                if (!pdfDoc || isRendering) return;
+                isRendering = true;
+                try {
+                    const page = await pdfDoc.getPage(num);
+                    // 設定高解析度的 scale，依賴 CSS 的 object-contain 來適應容器大小，避免手動計算造成的破版
+                    const viewport = page.getViewport({ scale: 2.0 }); 
+                    const context = pdfCanvas.getContext('2d');
+                    pdfCanvas.height = viewport.height; 
+                    pdfCanvas.width = viewport.width;
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+                    pageIndicator.textContent = `Page ${num} / ${pageCount}`;
+                    prevPageBtn.disabled = pageNum <= 1; nextPageBtn.disabled = pageNum >= pageCount;
+                } finally { isRendering = false; }
+            }
+            prevPageBtn.addEventListener('click', () => { if (pageNum > 1) { pageNum--; renderPage(pageNum); } });
+            nextPageBtn.addEventListener('click', () => { if (pageNum < pageCount) { pageNum++; renderPage(pageNum); } });
+
+            async function initWebcam() {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640 }, audio: { echoCancellation: true } });
+                    webcamVideo.srcObject = stream; 
+                    placeholder.classList.add('hidden'); 
+                    startBtn.disabled = false;
+                } catch (err) { 
+                    console.warn("Webcam blocked or error:", err);
+                    placeholder.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 text-red-500"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        <p class="font-bold text-red-400 text-sm mb-1">無法啟動攝影機</p>
+                        <p class="text-xs text-gray-400">1. 請確認網址為 https 開頭<br>2. 點擊網址列左側鎖頭圖示解除封鎖</p>
+                    `;
+                    startBtn.disabled = true; 
+                }
+            }
+
+            startBtn.addEventListener('click', () => { isRecording ? stopRecording() : startRecording(); });
+
+            function startRecording() {
+                if (!currentApiKey) { showToast("請先點擊右上角完成登入", "warning"); return loginModal.showModal(); }
+                if (!stream) return showToast("攝影機未就緒", "error");
+                
+                isRecording = true; recordedChunks = [];
+                speechScript.readOnly = true; speechScript.classList.add("opacity-60", "cursor-not-allowed");
+                
+                try { mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' }); } 
+                catch (e) { mediaRecorder = new MediaRecorder(stream); }
+                
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = handleStop;
+                mediaRecorder.start();
+
+                startBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="4"/></svg><span>${translations[currentLang].stopRecording}</span>`;
+                startBtn.classList.replace('bg-blue-600', 'bg-red-600');
+                startBtn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
+
+                startVideoTimer();
+                hideDashboard();
+                retryBtn.classList.add('hidden'); clearInterval(retryCountdownInterval);
+            }
+
+            function stopRecording() {
+                if(!isRecording) return;
+                mediaRecorder.stop(); isRecording = false; 
+                clearInterval(videoTimerInterval);
+                timerDisplay.classList.remove('text-red-500', 'animate-pulse');
+                
+                speechScript.readOnly = false; speechScript.classList.remove("opacity-60", "cursor-not-allowed");
+                startBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg><span>${translations[currentLang].analysisComplete}</span>`;
+                startBtn.classList.replace('bg-red-600', 'bg-blue-600');
+                startBtn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
+            }
+
+            function startVideoTimer() { 
+                videoSeconds = 180; 
+                timerDisplay.textContent = "03:00"; 
+                timerDisplay.classList.remove('text-red-500', 'animate-pulse');
+                
+                videoTimerInterval = setInterval(() => { 
+                    videoSeconds--; 
+                    timerDisplay.textContent = `${Math.floor(videoSeconds/60).toString().padStart(2,'0')}:${(videoSeconds%60).toString().padStart(2,'0')}`; 
+                    
+                    if (videoSeconds <= 30 && videoSeconds > 0) {
+                        timerDisplay.classList.add('text-red-500', 'animate-pulse');
+                    }
+                    
+                    if (videoSeconds <= 0) {
+                        clearInterval(videoTimerInterval);
+                        showToast("時間到！系統自動為您送出分析...", "warning");
+                        stopRecording();
+                    }
+                }, 1000); 
+            }
+
+            async function handleStop() {
+                showLoading("analyzing");
+                const blobType = mediaRecorder.mimeType || 'video/webm';
+                const videoBlob = new Blob(recordedChunks, { type: blobType });
+                
+                const usedSeconds = 180 - Math.max(0, videoSeconds);
+                const recordedDuration = `${Math.floor(usedSeconds/60).toString().padStart(2,'0')}:${(usedSeconds%60).toString().padStart(2,'0')}`; 
+                
+                const reader = new FileReader(); reader.readAsDataURL(videoBlob);
+                reader.onloadend = async function() {
+                    const base64data = reader.result.split(',')[1];
+                    retryData = { action: 'video', base64Video: base64data, script: speechScript.value, mimeType: blobType, duration: recordedDuration };
+                    await analyzePresentation(base64data, speechScript.value, blobType, recordedDuration);
+                }
+            }
+
+            async function analyzePresentation(base64Video, script, mimeType, recordedDuration) {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentApiKey}`;
+                
+                let systemPrompt = `你是一位嚴格且具建設性的「學術流言查核評審」。請評估學生根據「流言解剖簡報」進行的報告。
+                    **必須嚴格遵守以下 Markdown 輸出格式 (包含標題層級與符號)**：
+
+                    ### 🌟 總體評價
+                    [一句話總結]
+
+                    ### 🚀 總結建議
+                    [一個核心改善點]
+
+                    ### 📈 各項分析細節
+                    #### 一、破綻觀察與質疑
+                    **亮點:** [內容]
+                    **盲點:** [內容]
+                    #### 二、查證策略與工具應用
+                    **亮點:** [內容]
+                    **盲點:** [內容]
+                    #### 三、科學證據與真相判決
+                    **亮點:** [內容]
+                    **盲點:** [內容]
+                    #### 四、實驗延伸與表達
+                    **亮點:** [內容]
+                    **盲點:** [內容]
+
+                    ### 🤔 評審提問 (Mock Q&A)
+                    [提出 1 個最具挑戰性的問題，挑戰其科學邏輯、變因控制或文獻可靠度。請精簡且一針見血。]`;
+
+                let promptText = presentationContainer.style.display === 'flex' ? 
+                    `固定權重: 觀察25%, 查證20%, 證據35%, 延伸20%。請依此權重分析影片演講。` : 
+                    `講稿: ${script}\n請分析無簡報短講影片。`;
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: promptText }, { inlineData: { mimeType: mimeType, data: base64Video } }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] },
+                            generationConfig: { temperature: 0.3 }
+                        })
+                    });
+                    
+                    if (!response.ok) throw new Error("API 回傳異常");
+                    const result = await response.json();
+                    
+                    if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                        const feedbackText = result.candidates[0].content.parts[0].text;
+                        displayDashboard(feedbackText);
+                        showToast("影片分析完成！請準備進行答辯。", "success");
+                        
+                        const sumMatch = feedbackText.match(/### 🌟 總體評價\n(.*?)\n/);
+                        callGAS({ action: 'log_result', className: currentStudentClass, seatNumber: currentStudentSeat, name: currentStudentName, duration: recordedDuration, feedback: sumMatch ? sumMatch[1].trim() : "完成" });
+                    } else { throw new Error("未收到有效報告"); }
+                } catch (error) {
+                    showError("目前線路擁擠，您的影片已保留，請等待 10 秒後點擊『重試』按鈕。");
+                    setupRetryButton('video');
+                }
+            }
+
+            function displayDashboard(text) {
+                hideDashboard();
+                feedbackResult.classList.remove('hidden');
+                
+                const sections = {
+                    overall: text.match(/### 🌟 總體評價\n([\s\S]*?)###/)?.[1] || "",
+                    summary: text.match(/### 🚀 總結建議\n([\s\S]*?)###/)?.[1] || "",
+                    qa: text.match(/### 🤔 評審提問 \(Mock Q&A\)\n([\s\S]*?)$/)?.[1] || "",
+                    obs: text.match(/#### 一、破綻觀察與質疑\n([\s\S]*?)####/)?.[1] || "",
+                    strat: text.match(/#### 二、查證策略與工具應用\n([\s\S]*?)####/)?.[1] || "",
+                    evid: text.match(/#### 三、科學證據與真相判決\n([\s\S]*?)####/)?.[1] || "",
+                    ext: text.match(/#### 四、實驗延伸與表達\n([\s\S]*?)###/)?.[1] || ""
+                };
+                
+                currentQATextContext = sections.qa.trim();
+                const formatDetails = (content) => content.replace(/\*\*(.*?):\*\*/g, (m, p) => `<strong class="block mt-2 ${p.includes('亮點')?'text-green-400':'text-yellow-400'}">${p}:</strong>`).replace(/\n/g, '<br>');
+
+                feedbackResult.innerHTML = `
+                    <div class="md:col-span-1 flex flex-col space-y-4">
+                        <div class="bg-gray-800/80 rounded-xl p-5 border border-gray-700 h-1/2 flex flex-col">
+                            <h3 class="text-lg font-bold text-yellow-400 mb-2 flex items-center"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>總體評價</h3>
+                            <p class="text-sm text-gray-300 flex-grow overflow-y-auto custom-scrollbar">${sections.overall}</p>
+                        </div>
+                        <div class="bg-gray-800/80 rounded-xl p-5 border border-gray-700 h-1/2 flex flex-col">
+                            <h3 class="text-lg font-bold text-red-400 mb-2 flex items-center"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>總結建議</h3>
+                            <p class="text-sm text-gray-300 flex-grow overflow-y-auto custom-scrollbar">${sections.summary}</p>
+                        </div>
+                    </div>
+                    <div class="md:col-span-2 bg-gray-800/80 rounded-xl p-5 border border-gray-700">
+                        <h3 class="text-lg font-bold text-green-400 mb-4 flex items-center"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>各項分析細節</h3>
+                        <div class="grid grid-cols-2 gap-4 h-[calc(100%-2rem)]">
+                            <div class="bg-gray-900/50 p-3 rounded-lg overflow-y-auto custom-scrollbar"><h4 class="font-bold text-gray-200 text-sm border-l-2 border-blue-500 pl-2">破綻觀察與質疑</h4><p class="text-xs text-gray-400 mt-1">${formatDetails(sections.obs)}</p></div>
+                            <div class="bg-gray-900/50 p-3 rounded-lg overflow-y-auto custom-scrollbar"><h4 class="font-bold text-gray-200 text-sm border-l-2 border-blue-500 pl-2">查證策略與工具</h4><p class="text-xs text-gray-400 mt-1">${formatDetails(sections.strat)}</p></div>
+                            <div class="bg-gray-900/50 p-3 rounded-lg overflow-y-auto custom-scrollbar"><h4 class="font-bold text-gray-200 text-sm border-l-2 border-blue-500 pl-2">證據與真相判決</h4><p class="text-xs text-gray-400 mt-1">${formatDetails(sections.evid)}</p></div>
+                            <div class="bg-gray-900/50 p-3 rounded-lg overflow-y-auto custom-scrollbar"><h4 class="font-bold text-gray-200 text-sm border-l-2 border-blue-500 pl-2">實驗延伸與表達</h4><p class="text-xs text-gray-400 mt-1">${formatDetails(sections.ext)}</p></div>
+                        </div>
+                    </div>
+                    <div class="md:col-span-1 bg-purple-900/20 rounded-xl p-5 border border-purple-800/50 flex flex-col h-full">
+                        <h3 class="text-lg font-bold text-purple-400 mb-3 flex items-center flex-shrink-0"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>評審提問</h3>
+                        <p class="text-sm text-gray-300 italic bg-gray-900/40 p-4 rounded-lg border border-purple-900/30 mb-4 flex-shrink-0">${sections.qa.replace(/\n/g, '<br>')}</p>
+                        
+                        <div id="defenseActiveArea" class="flex-grow flex flex-col">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm font-bold text-blue-300">📝 你的文字答辯</span>
+                                <span id="defenseTimerDisplay" class="text-red-400 font-mono font-bold text-lg px-2 bg-red-900/20 rounded border border-red-900/50">05:00</span>
+                            </div>
+                            <textarea id="defenseInput" class="flex-grow bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-200 text-sm focus:ring-1 focus:ring-blue-500 outline-none resize-none custom-scrollbar mb-3" placeholder="請針對提問撰寫防禦或補充說明... (時間到將強制送出)"></textarea>
+                            <button id="submitDefenseBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-lg transition-colors text-sm shadow-lg flex-shrink-0">提早送出答辯</button>
+                        </div>
+
+                        <div id="defenseResultArea" class="hidden flex-grow flex-col">
+                            <span class="text-sm font-bold text-green-400 mb-2 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> AI 評審最終講評</span>
+                            <p id="defenseFeedbackText" class="text-sm text-gray-300 bg-gray-900/50 p-4 rounded-lg border border-green-900/30 flex-grow overflow-y-auto custom-scrollbar"></p>
+                        </div>
+                    </div>`;
+
+                setupDefenseLogic();
+            }
+
+            function setupDefenseLogic() {
+                const defenseInput = document.getElementById('defenseInput');
+                const submitDefenseBtn = document.getElementById('submitDefenseBtn');
+                const defenseTimerDisplay = document.getElementById('defenseTimerDisplay');
+                
+                defenseSeconds = 300; 
+                
+                defenseTimerInterval = setInterval(() => {
+                    defenseSeconds--;
+                    defenseTimerDisplay.textContent = `${Math.floor(defenseSeconds/60).toString().padStart(2,'0')}:${(defenseSeconds%60).toString().padStart(2,'0')}`;
+                    
+                    if (defenseSeconds <= 30) defenseTimerDisplay.classList.add('animate-pulse');
+                    
+                    if (defenseSeconds <= 0) {
+                        clearInterval(defenseTimerInterval);
+                        showToast("答辯時間到！系統自動為您送出...", "warning");
+                        executeDefenseAnalysis(currentQATextContext, defenseInput.value || "(未作答)");
+                    }
+                }, 1000);
+
+                submitDefenseBtn.addEventListener('click', () => {
+                    clearInterval(defenseTimerInterval);
+                    executeDefenseAnalysis(currentQATextContext, defenseInput.value || "(未作答)");
+                });
+            }
+
+            async function executeDefenseAnalysis(qaText, defenseText) {
+                const defenseInput = document.getElementById('defenseInput');
+                const submitDefenseBtn = document.getElementById('submitDefenseBtn');
+                
+                defenseInput.disabled = true; defenseInput.classList.add('opacity-50');
+                submitDefenseBtn.disabled = true; submitDefenseBtn.innerHTML = '送出中...';
+                
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentApiKey}`;
+                const prompt = `你是一位學術研討會的評審。這是你剛才對學生的提問：\n"${qaText}"\n\n這是學生的文字答辯：\n"${defenseText}"\n\n請根據學生的答辯給予簡短、具建設性的最終講評 (約 100 字內)。直接給出講評文字，不需額外標題。`;
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } })
+                    });
+                    
+                    if (!response.ok) throw new Error("API 回傳異常");
+                    const result = await response.json();
+                    
+                    if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                        const finalFeedback = result.candidates[0].content.parts[0].text;
+                        document.getElementById('defenseActiveArea').classList.add('hidden');
+                        document.getElementById('defenseResultArea').classList.remove('hidden');
+                        document.getElementById('defenseResultArea').classList.add('flex');
+                        document.getElementById('defenseFeedbackText').innerHTML = finalFeedback.replace(/\n/g, '<br>');
+                        
+                        showToast("答辯評估完成！", "success");
+                        callGAS({ action: 'log_defense', className: currentStudentClass, seatNumber: currentStudentSeat, name: currentStudentName, defenseText: defenseText, defenseFeedback: finalFeedback });
+                    } else { throw new Error("未收到有效報告"); }
+                } catch (error) {
+                    showToast("答辯送出失敗，請重試。", "error");
+                    submitDefenseBtn.disabled = false; submitDefenseBtn.innerHTML = '重試送出';
+                }
+            }
+
+            function hideDashboard() {
+                initialState.style.display = 'none'; loadingState.style.display = 'none'; errorState.style.display = 'none';
+                feedbackResult.classList.add('hidden');
+            }
+            function showLoading(type = "analyzing") { 
+                hideDashboard(); 
+                loadingMsgText.textContent = type === "analyzing" ? "Gemini AI 正在為您解剖報告" : "AI 評審正在聆聽您的答辯...";
+                loadingState.style.display = 'flex'; 
+            }
+            function showError(msg) { hideDashboard(); errorMessage.textContent = msg; errorState.style.display = 'flex'; }
+
+            function setupRetryButton(actionType) {
+                retryBtn.classList.remove('hidden'); retryBtn.disabled = true;
+                let c = 10; retryBtnText.textContent = `重試 (${c}s)`;
+                clearInterval(retryCountdownInterval);
+                retryCountdownInterval = setInterval(() => {
+                    c--; if (c > 0) { retryBtnText.textContent = `重試 (${c}s)`; } 
+                    else { clearInterval(retryCountdownInterval); retryBtn.disabled = false; retryBtnText.textContent = '重試'; }
+                }, 1000);
+            }
+
+            retryBtn.addEventListener('click', () => {
+                if (retryData.action === 'video' && retryData.base64Video) {
+                    retryBtn.classList.add('hidden'); clearInterval(retryCountdownInterval);
+                    showLoading("analyzing"); 
+                    analyzePresentation(retryData.base64Video, retryData.script, retryData.mimeType, retryData.duration);
+                }
+            });
+
+            if (typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+            renderScoringCriteria(); initWebcam(); setMode('presentation'); 
+        });
+    </script>
+</body>
+</html>
