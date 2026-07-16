@@ -771,7 +771,7 @@
                 defenseInput.disabled = true; defenseInput.classList.add('opacity-50');
                 submitDefenseBtn.disabled = true; submitDefenseBtn.innerHTML = '送出中...';
                 
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentApiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${currentApiKey}`;
                 const prompt = `你是一位學術研討會的評審。這是你剛才對學生的提問：\n"${qaText}"\n\n這是學生的文字答辯：\n"${defenseText}"\n\n請根據學生的答辯給予簡短、具建設性的最終講評 (約 100 字內)。直接給出講評文字，不需額外標題。`;
 
                 try {
