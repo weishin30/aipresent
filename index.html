@@ -605,6 +605,7 @@
             async function handleStop() {
                 showLoading("analyzing");
                 const blobType = mediaRecorder.mimeType || 'video/webm';
+                const apiMimeType = blobType.split(';')[0];
                 const videoBlob = new Blob(recordedChunks, { type: blobType });
                 
                 const usedSeconds = 180 - Math.max(0, videoSeconds);
@@ -612,9 +613,9 @@
                 
                 const reader = new FileReader(); reader.readAsDataURL(videoBlob);
                 reader.onloadend = async function() {
-                    const base64data = reader.result.split(',')[1];
-                    retryData = { action: 'video', base64Video: base64data, script: speechScript.value, mimeType: blobType, duration: recordedDuration };
-                    await analyzePresentation(base64data, speechScript.value, blobType, recordedDuration);
+                    const base64data = reader.result.split(';base64,')[1];
+                    retryData = { action: 'video', base64Video: base64data, script: speechScript.value, mimeType: apiMimeType, duration: recordedDuration };
+                         await analyzePresentation(base64data, speechScript.value, apiMimeType, recordedDuration);
                 }
             }
 
