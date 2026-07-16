@@ -620,7 +620,7 @@
             }
 
             async function analyzePresentation(base64Video, script, mimeType, recordedDuration) {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${currentApiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${currentApiKey}`;
                 
                 let systemPrompt = `你是一位嚴格且具建設性的「學術流言查核評審」。請評估學生根據「流言解剖簡報」進行的報告。
                     **必須嚴格遵守以下 Markdown 輸出格式 (包含標題層級與符號)**：
