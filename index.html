@@ -174,6 +174,7 @@
         </footer>
     </div>
 
+
     <!-- 學生登入視窗 -->
     <dialog id="loginModal" class="bg-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-700 text-white m-auto backdrop:bg-black/80">
         <div class="flex items-center space-x-3 mb-6">
@@ -346,6 +347,8 @@
             let mediaRecorder;
             let recordedChunks = [];
             let stream;
+            let hasVideo = false;   // 攝影機是否可用
+            let hasAudio = false;   // 麥克風是否可用
             
             // 雙階段計時器設定
             let videoTimerInterval;
@@ -535,20 +538,59 @@
             prevPageBtn.addEventListener('click', () => { if (pageNum > 1) { pageNum--; renderPage(pageNum); } });
             nextPageBtn.addEventListener('click', () => { if (pageNum < pageCount) { pageNum++; renderPage(pageNum); } });
 
-            async function initWebcam() {
+            // 麥克風與攝影機「分開」請求授權，彼此不綁定：
+            // 任一裝置失敗或被拒絕，另一個仍可獨立運作
+            async function initMedia() {
+                const tracks = [];
+
+                // 1. 先請求麥克風（口說分析的核心）
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640 }, audio: { echoCancellation: true } });
-                    webcamVideo.srcObject = stream; 
-                    placeholder.classList.add('hidden'); 
+                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
+                    tracks.push(...audioStream.getAudioTracks());
+                    hasAudio = true;
+                } catch (err) { console.warn("麥克風不可用:", err); }
+
+                // 2. 再請求攝影機（獨立請求，失敗不影響麥克風）
+                try {
+                    const videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640 } });
+                    tracks.push(...videoStream.getVideoTracks());
+                    hasVideo = true;
+                } catch (err) { console.warn("攝影機不可用:", err); }
+
+                if (tracks.length > 0) stream = new MediaStream(tracks);
+                updateDeviceStatusUI();
+            }
+
+            // 依據兩裝置各自的狀態更新畫面與按鈕
+            function updateDeviceStatusUI() {
+                if (hasVideo && hasAudio) {
+                    // 兩者皆可：正常影音模式
+                    webcamVideo.srcObject = stream;
+                    placeholder.classList.add('hidden');
                     startBtn.disabled = false;
-                } catch (err) { 
-                    console.warn("Webcam blocked or error:", err);
+                } else if (hasAudio && !hasVideo) {
+                    // 僅麥克風：純聲音模式，仍可錄音分析
+                    placeholder.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 text-blue-400"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                        <p class="font-bold text-blue-300 text-sm mb-1">🎙️ 純聲音模式</p>
+                        <p class="text-xs text-gray-400">攝影機未啟用，將僅錄製聲音進行口說分析<br>（台風儀態項目將無法評估）</p>
+                    `;
+                    startBtn.disabled = false;
+                    showToast("攝影機未啟用，已切換為純聲音模式", "warning");
+                } else if (hasVideo && !hasAudio) {
+                    // 僅攝影機：可錄影但無聲音，AI 無法分析口說，給予明確警告
+                    webcamVideo.srcObject = stream;
+                    placeholder.classList.add('hidden');
+                    startBtn.disabled = false;
+                    showToast("麥克風未啟用！AI 將聽不到您的聲音，建議檢查權限", "error");
+                } else {
+                    // 兩者皆不可用
                     placeholder.innerHTML = `
                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-3 text-red-500"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                        <p class="font-bold text-red-400 text-sm mb-1">無法啟動攝影機</p>
-                        <p class="text-xs text-gray-400">1. 請確認網址為 https 開頭<br>2. 點擊網址列左側鎖頭圖示解除封鎖</p>
+                        <p class="font-bold text-red-400 text-sm mb-1">無法啟動攝影機與麥克風</p>
+                        <p class="text-xs text-gray-400">1. 請確認網址為 https 開頭<br>2. 點擊網址列左側鎖頭圖示解除封鎖後重新整理</p>
                     `;
-                    startBtn.disabled = true; 
+                    startBtn.disabled = true;
                 }
             }
 
@@ -556,12 +598,16 @@
 
             function startRecording() {
                 if (!currentApiKey) { showToast("請先點擊右上角完成登入", "warning"); return loginModal.showModal(); }
-                if (!stream) return showToast("攝影機未就緒", "error");
+                if (!stream) return showToast("麥克風/攝影機未就緒", "error");
                 
                 isRecording = true; recordedChunks = [];
                 speechScript.readOnly = true; speechScript.classList.add("opacity-60", "cursor-not-allowed");
                 
-                try { mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' }); } 
+                // 依實際取得的軌道決定錄製格式：有影像用 video/webm，純聲音用 audio/webm
+                const recordOptions = stream.getVideoTracks().length > 0
+                    ? { mimeType: 'video/webm; codecs=vp9' }
+                    : { mimeType: 'audio/webm' };
+                try { mediaRecorder = new MediaRecorder(stream, recordOptions); } 
                 catch (e) { mediaRecorder = new MediaRecorder(stream); }
                 
                 mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
@@ -612,7 +658,7 @@
 
             async function handleStop() {
                 showLoading("analyzing");
-                const blobType = mediaRecorder.mimeType || 'video/webm';
+                const blobType = mediaRecorder.mimeType || (hasVideo ? 'video/webm' : 'audio/webm');
                 const apiMimeType = blobType.split(';')[0];
                 const videoBlob = new Blob(recordedChunks, { type: blobType });
                 
@@ -656,9 +702,14 @@
                     ### 🤔 評審提問 (Mock Q&A)
                     [提出 1 個最具挑戰性的問題，挑戰其科學邏輯、變因控制或文獻可靠度。請精簡且一針見血。]`;
 
-                let promptText = presentationContainer.style.display === 'flex' ? 
+                // 告知 AI 實際媒體條件，避免對缺少的部分做出不合理評論
+                let mediaNote = "";
+                if (!hasVideo) mediaNote = "\n【注意】本次僅提供聲音檔（無影像），請專注分析口語內容與表達；「台風儀態」相關項目請註明因無影像而無法評估，勿因此扣分。";
+                else if (!hasAudio) mediaNote = "\n【注意】本次影片沒有聲音（麥克風未啟用），請僅分析視覺呈現；口語相關項目請註明因無聲音而無法評估。";
+
+                let promptText = (presentationContainer.style.display === 'flex' ? 
                     `固定權重: 觀察25%, 查證20%, 證據35%, 延伸20%。請依此權重分析影片演講。` : 
-                    `講稿: ${script}\n請分析無簡報短講影片。`;
+                    `講稿: ${script}\n請分析無簡報短講影片。`) + mediaNote;
 
                 try {
                     const response = await fetch(url, {
@@ -837,7 +888,7 @@
             });
 
             if (typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
-            renderScoringCriteria(); initWebcam(); setMode('presentation'); 
+            renderScoringCriteria(); initMedia(); setMode('presentation'); 
         });
     </script>
 </body>
