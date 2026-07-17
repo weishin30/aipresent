@@ -166,6 +166,12 @@
                 <div id="feedbackResult" class="hidden grid grid-cols-1 md:grid-cols-4 gap-6"></div>
              </div>
         </section>
+
+        <!-- 頁尾版權宣告 -->
+        <footer class="text-center py-6 mt-2 flex-shrink-0">
+            <p class="text-sm text-gray-500 tracking-wide" data-i18n="footerText"><span class="font-semibold text-gray-400">芯課堂 X Gemini </span><span class="mx-1">協作開發</span><span class="mx-2 text-gray-700">｜</span><span>內容版權所有・翻印必究</span></p>
+            <p class="text-sm text-gray-500 tracking-wide" data-i18n="footerText"><span class="font-semibold text-gray-400">感謝 Sophie Tai老師 </span><span class="mx-1">提供 AI 公眾演講教練 </span><span class="mx-2 text-gray-700">｜</span><span>做為參考</span></p>
+        </footer>
     </div>
 
     <!-- 學生登入視窗 -->
@@ -278,6 +284,7 @@
                     analyzingDefense: 'AI 評審正在聆聽您的答辯...',
                     analysisFailed: 'AI 處理遭遇阻礙',
                     description: '重點',
+                    footerText: '<span class="font-semibold text-gray-400">芯課堂</span><span class="mx-1">協作開發</span><span class="mx-2 text-gray-700">｜</span><span>內容版權所有・翻印必究</span>',
                     crit_obs: '破綻觀察與質疑',
                     crit_obs_desc: '清楚描述流言現象，並敏銳指出忽略的變因或不合理處',
                     crit_strategy: '查證策略與工具應用',
@@ -310,6 +317,7 @@
                     analyzingDefense: 'AI is evaluating your defense...',
                     analysisFailed: 'Processing failed',
                     description: 'Focus',
+                    footerText: '<span class="font-semibold text-gray-400">Xin Classroom</span><span class="mx-1">Collaborative Development</span><span class="mx-2 text-gray-700">｜</span><span>All Rights Reserved</span>',
                     crit_obs: 'Observation & Questioning',
                     crit_obs_desc: 'Describes the rumor clearly, identifies missing variables.',
                     crit_strategy: 'Verification Strategy',
@@ -615,7 +623,7 @@
                 reader.onloadend = async function() {
                     const base64data = reader.result.split(';base64,')[1];
                     retryData = { action: 'video', base64Video: base64data, script: speechScript.value, mimeType: apiMimeType, duration: recordedDuration };
-                         await analyzePresentation(base64data, speechScript.value, apiMimeType, recordedDuration);
+                    await analyzePresentation(base64data, speechScript.value, apiMimeType, recordedDuration);
                 }
             }
 
